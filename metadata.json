@@ -1,0 +1,5 @@
+{
+  "name": "MC Script Editor",
+  "description": "An application to create, edit, and print MC scripts with automatic page breaks and Word export.",
+  "requestFramePermissions": []
+}
