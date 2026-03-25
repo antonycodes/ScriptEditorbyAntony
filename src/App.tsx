@@ -309,7 +309,7 @@ const App = () => {
         <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Layout className="w-6 h-6" /> Soạn Kịch Bản MC (Ngắt Trang Tự Động)
+              <Layout className="w-6 h-6" /> Script Editor by Antony V1.1
             </h1>
             <p className="opacity-80 text-sm mt-1">Khổ A5 • Font 14pt • Xuất Word & PDF</p>
           </div>
