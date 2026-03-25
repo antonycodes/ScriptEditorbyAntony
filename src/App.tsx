@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag, Bold, Undo, Redo } from 'lucide-react';
+import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag, Bold, Undo, Redo, Download, Upload } from 'lucide-react';
 
 const initialMetadata = {
   schoolName: '',
@@ -245,6 +245,45 @@ const App = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportToJson = () => {
+    const data = { metadata, sections };
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const fileDownload = document.createElement("a");
+    document.body.appendChild(fileDownload);
+    fileDownload.href = url;
+    fileDownload.download = `Kich-Ban-MC-${new Date().getTime()}.json`;
+    fileDownload.click();
+    document.body.removeChild(fileDownload);
+    URL.revokeObjectURL(url);
+  };
+
+  const importFromJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (data.metadata && data.sections) {
+          setMetadata(data.metadata);
+          setSections(data.sections);
+          setHistory([{ sections: data.sections, metadata: data.metadata }]);
+          setHistoryIndex(0);
+        } else {
+          alert('File không đúng định dạng dự án Kịch Bản MC.');
+        }
+      } catch (error) {
+        alert('Lỗi khi đọc file JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const insertTag = (sectionId: string, tag: string) => {
     const editor = document.getElementById(`editor-${sectionId}`);
     if (editor) {
@@ -324,6 +363,22 @@ const App = () => {
 
             <div className="p-4 bg-blue-50 rounded-xl text-blue-800 text-xs">
               <p>📌 <strong>Lưu ý:</strong> Mỗi "Phần" bạn thêm bên phải sẽ tự động nằm ở <strong>đầu một trang mới</strong> khi in hoặc xuất Word.</p>
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-gray-100">
+              <button onClick={exportToJson} className="w-full bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-50 shadow-sm transition-colors">
+                <Download className="w-4 h-4" /> Lưu dự án (JSON)
+              </button>
+              <button onClick={() => document.getElementById('import-json')?.click()} className="w-full bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-50 shadow-sm transition-colors">
+                <Upload className="w-4 h-4" /> Mở dự án (JSON)
+              </button>
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                id="import-json"
+                onChange={importFromJson}
+              />
             </div>
           </div>
 
