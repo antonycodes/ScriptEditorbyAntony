@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag, Bold, Undo, Redo, Download, Upload } from 'lucide-react';
+import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag, Bold, Undo, Redo, Download, Upload, Maximize2, Minimize2 } from 'lucide-react';
 
 const initialMetadata = {
   schoolName: '',
@@ -13,7 +13,7 @@ const initialSections = [
   { id: '2', title: 'NỘI DUNG CHÍNH', content: 'Tiếp theo chương trình, xin mời quý vị cùng lắng nghe phần chia sẻ từ [DIEN_GIA].' }
 ];
 
-const RichTextEditor = ({ id, content, onChange }: { id: string, content: string, onChange: (val: string) => void }) => {
+const RichTextEditor = ({ id, content, onChange, className }: { id: string, content: string, onChange: (val: string) => void, className?: string }) => {
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ const RichTextEditor = ({ id, content, onChange }: { id: string, content: string
       id={id}
       ref={editorRef}
       contentEditable
-      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-lg min-h-[100px] outline-none text-sm custom-editor whitespace-pre-wrap"
+      className={`w-full p-3 bg-gray-50 border border-gray-100 rounded-lg min-h-[100px] outline-none text-sm custom-editor whitespace-pre-wrap resize-y overflow-auto ${className || ''}`}
       onInput={handleInput}
       suppressContentEditableWarning
     />
@@ -41,6 +41,7 @@ const RichTextEditor = ({ id, content, onChange }: { id: string, content: string
 const App = () => {
   const [metadata, setMetadata] = useState(initialMetadata);
   const [sections, setSections] = useState(initialSections);
+  const [detachedSectionId, setDetachedSectionId] = useState<string | null>(null);
 
   const [history, setHistory] = useState([{ sections: initialSections, metadata: initialMetadata }]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -309,7 +310,7 @@ const App = () => {
         <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Layout className="w-6 h-6" /> Script Editor by Antony V1.1
+              <Layout className="w-6 h-6" /> Script Editor by Antony
             </h1>
             <p className="opacity-80 text-sm mt-1">Khổ A5 • Font 14pt • Xuất Word & PDF</p>
           </div>
@@ -413,9 +414,14 @@ const App = () => {
                         onChange={(e) => handleSectionChange(section.id, 'title', e.target.value)}
                       />
                     </div>
-                    <button onClick={() => removeSection(section.id)} className="text-gray-300 hover:text-red-500 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setDetachedSectionId(section.id)} className="text-gray-400 hover:text-blue-600 transition-colors" title="Mở rộng (Mở tab riêng)">
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => removeSection(section.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="Xóa">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   
                   <RichTextEditor
@@ -450,6 +456,62 @@ const App = () => {
           </div>
         </div>
       </div>
+
+      {/* Detached Section Modal */}
+      {detachedSectionId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 md:p-8">
+          <div className="bg-white w-full max-w-5xl h-full max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            {(() => {
+              const section = sections.find(s => s.id === detachedSectionId);
+              if (!section) return null;
+              return (
+                <>
+                  <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <div className="flex items-center gap-3 w-full max-w-md">
+                      <span className="bg-gray-800 text-white text-xs px-2 py-1 rounded font-bold">
+                        TRANG {sections.findIndex(s => s.id === detachedSectionId) + 2}
+                      </span>
+                      <input
+                        type="text"
+                        className="font-bold text-gray-700 bg-transparent outline-none border-b border-transparent focus:border-blue-300 w-full text-lg"
+                        placeholder="Tiêu đề trang mới..."
+                        value={section.title}
+                        onChange={(e) => handleSectionChange(section.id, 'title', e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setDetachedSectionId(null)} className="text-gray-500 hover:text-gray-800 p-2 bg-gray-200 rounded-lg transition-colors" title="Thu nhỏ">
+                        <Minimize2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 p-6 overflow-y-auto flex flex-col bg-slate-50">
+                    <RichTextEditor
+                      id={`editor-detached-${section.id}`}
+                      content={section.content}
+                      onChange={(val) => handleSectionChange(section.id, 'content', val)}
+                      className="flex-1 text-base resize-none bg-white shadow-sm border-gray-200"
+                    />
+                  </div>
+
+                  <div className="p-4 border-t border-gray-100 bg-white flex flex-wrap gap-2 items-center">
+                    {['TRUONG', 'MC', 'DIEN_GIA', 'SU_KIEN'].map(tag => (
+                      <button key={tag} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTag(`detached-${section.id}`, tag)} className="text-sm bg-white border px-3 py-1.5 rounded-lg hover:bg-blue-50 hover:text-blue-600 font-medium shadow-sm">
+                        [{tag}]
+                      </button>
+                    ))}
+                    <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => insertBold(`detached-${section.id}`)} className="text-sm bg-white border px-3 py-1.5 rounded-lg hover:bg-gray-100 flex items-center gap-1 font-bold shadow-sm" title="In đậm (Ctrl+B)">
+                      <Bold className="w-4 h-4" /> Bold
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* PRINT ENGINE */}
       <div id="mc-script-print" className="hidden print:block bg-white mx-auto print-container">
