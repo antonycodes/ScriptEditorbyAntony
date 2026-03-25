@@ -1,36 +1,173 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Printer, FileText, User, School, Mic2, Layout, Type, Info, Tag, Bold, Undo, Redo } from 'lucide-react';
+
+const initialMetadata = {
+  schoolName: '',
+  speakerName: '',
+  mcName: '',
+  eventTitle: 'KỊCH BẢN CHƯƠNG TRÌNH'
+};
+
+const initialSections = [
+  { id: '1', title: 'MỞ ĐẦU', content: 'Kính thưa quý vị, tôi là [MC]. Chào mừng quý vị đến với [SU_KIEN] tại [TRUONG]. Hôm nay chúng ta có sự hiện diện của diễn giả [DIEN_GIA].' },
+  { id: '2', title: 'NỘI DUNG CHÍNH', content: 'Tiếp theo chương trình, xin mời quý vị cùng lắng nghe phần chia sẻ từ [DIEN_GIA].' }
+];
+
+const RichTextEditor = ({ id, content, onChange }: { id: string, content: string, onChange: (val: string) => void }) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editorRef.current && content !== editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = content;
+    }
+  }, [content]);
+
+  const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+    onChange(e.currentTarget.innerHTML);
+  };
+
+  return (
+    <div
+      id={id}
+      ref={editorRef}
+      contentEditable
+      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-lg min-h-[100px] outline-none text-sm custom-editor whitespace-pre-wrap"
+      onInput={handleInput}
+      suppressContentEditableWarning
+    />
+  );
+};
 
 const App = () => {
-  const [metadata, setMetadata] = useState({
-    schoolName: '',
-    speakerName: '',
-    mcName: '',
-    eventTitle: 'KỊCH BẢN CHƯƠNG TRÌNH'
-  });
+  const [metadata, setMetadata] = useState(initialMetadata);
+  const [sections, setSections] = useState(initialSections);
 
-  const [sections, setSections] = useState([
-    { id: '1', title: 'MỞ ĐẦU', content: 'Kính thưa quý vị, tôi là [MC]. Chào mừng quý vị đến với [SU_KIEN] tại [TRUONG]. Hôm nay chúng ta có sự hiện diện của diễn giả [DIEN_GIA].' },
-    { id: '2', title: 'NỘI DUNG CHÍNH', content: 'Tiếp theo chương trình, xin mời quý vị cùng lắng nghe phần chia sẻ từ [DIEN_GIA].' }
-  ]);
+  const [history, setHistory] = useState([{ sections: initialSections, metadata: initialMetadata }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  const stateRef = useRef({ sections, metadata, history, historyIndex });
+  useEffect(() => {
+    stateRef.current = { sections, metadata, history, historyIndex };
+  }, [sections, metadata, history, historyIndex]);
+
+  const typingTimeoutRef = useRef(null);
+
+  const commitAction = (newSections, newMetadata) => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    const { history, historyIndex } = stateRef.current;
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push({ sections: newSections, metadata: newMetadata });
+    if (newHistory.length > 50) newHistory.shift();
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setSections(newSections);
+    setMetadata(newMetadata);
+  };
+
+  const handleSectionChange = (id, field, value) => {
+    const newSections = sections.map(s => s.id === id ? { ...s, [field]: value } : s);
+    setSections(newSections);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      const { history, historyIndex, metadata } = stateRef.current;
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push({ sections: newSections, metadata });
+      if (newHistory.length > 50) newHistory.shift();
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+    }, 1000);
+  };
+
+  const handleMetadataChange = (field, value) => {
+    const newMetadata = { ...metadata, [field]: value };
+    setMetadata(newMetadata);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      const { history, historyIndex, sections } = stateRef.current;
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push({ sections, metadata: newMetadata });
+      if (newHistory.length > 50) newHistory.shift();
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+    }, 1000);
+  };
+
+  const undo = () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    const { history, historyIndex, sections, metadata } = stateRef.current;
+    
+    const currentStateIsUncommitted = 
+      history[historyIndex]?.sections !== sections || 
+      history[historyIndex]?.metadata !== metadata;
+
+    if (currentStateIsUncommitted) {
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push({ sections, metadata });
+      if (newHistory.length > 50) newHistory.shift();
+      setHistory(newHistory);
+      
+      const newIndex = newHistory.length - 2;
+      setHistoryIndex(newIndex);
+      setSections(newHistory[newIndex].sections);
+      setMetadata(newHistory[newIndex].metadata);
+    } else if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setSections(history[newIndex].sections);
+      setMetadata(history[newIndex].metadata);
+    }
+  };
+
+  const redo = () => {
+    const { history, historyIndex } = stateRef.current;
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setSections(history[newIndex].sections);
+      setMetadata(history[newIndex].metadata);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.hasAttribute('contenteditable') && activeElement.id.startsWith('editor-')) {
+          e.preventDefault();
+          const sectionId = activeElement.id.replace('editor-', '');
+          insertBold(sectionId);
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const addSection = () => {
     const newId = Math.random().toString(36).substr(2, 9);
-    setSections([...sections, { id: newId, title: '', content: '' }]);
+    const newSections = [...sections, { id: newId, title: '', content: '' }];
+    commitAction(newSections, metadata);
   };
 
   const removeSection = (id) => {
     if (sections.length > 1) {
-      setSections(sections.filter(s => s.id !== id));
+      const newSections = sections.filter(s => s.id !== id);
+      commitAction(newSections, metadata);
     }
-  };
-
-  const updateSection = (id, field, value) => {
-    setSections(sections.map(s => s.id === id ? { ...s, [field]: value } : s));
-  };
-
-  const updateMetadata = (field, value) => {
-    setMetadata({ ...metadata, [field]: value });
   };
 
   const processPlaceholders = (text) => {
@@ -48,7 +185,6 @@ const App = () => {
 
   const exportToDoc = () => {
     const printElement = document.getElementById('mc-script-print');
-    // We construct a special Word-compatible HTML string
     const header = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
@@ -75,7 +211,6 @@ const App = () => {
         <div class="Section1">
     `;
 
-    // Create the content with explicit page breaks for Word
     let contentHtml = `
       <h2>${metadata.schoolName || ''}</h2>
       <h1>${metadata.eventTitle}</h1>
@@ -86,10 +221,9 @@ const App = () => {
     `;
 
     sections.forEach((section, index) => {
-      // Adding page break before each section
       contentHtml += `<div class="page-break"></div>`;
       contentHtml += `<h3>${index + 1}. ${section.title || 'PHẦN ' + (index + 1)}</h3>`;
-      contentHtml += `<p style="text-align: justify;">${processPlaceholders(section.content).replace(/\n/g, '<br/>')}</p>`;
+      contentHtml += `<div style="text-align: justify; margin-bottom: 10pt;">${processPlaceholders(section.content).replace(/\n/g, '<br/>')}</div>`;
     });
 
     const footer = `
@@ -111,10 +245,24 @@ const App = () => {
     URL.revokeObjectURL(url);
   };
 
-  const insertTag = (sectionId, tag) => {
-    const section = sections.find(s => s.id === sectionId);
-    updateSection(sectionId, 'content', section.content + ` [${tag}] `);
+  const insertTag = (sectionId: string, tag: string) => {
+    const editor = document.getElementById(`editor-${sectionId}`);
+    if (editor) {
+      editor.focus();
+      document.execCommand('insertText', false, `[${tag}]`);
+    }
   };
+
+  const insertBold = (sectionId: string) => {
+    const editor = document.getElementById(`editor-${sectionId}`);
+    if (editor) {
+      editor.focus();
+      document.execCommand('bold', false, undefined);
+    }
+  };
+
+  const canUndo = historyIndex > 0 || history[historyIndex]?.sections !== sections || history[historyIndex]?.metadata !== metadata;
+  const canRedo = historyIndex < history.length - 1;
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans">
@@ -122,7 +270,7 @@ const App = () => {
         <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Layout className="w-6 h-6" /> SCRIPT EDITOR BY ANTONY V.1
+              <Layout className="w-6 h-6" /> Soạn Kịch Bản MC (Ngắt Trang Tự Động)
             </h1>
             <p className="opacity-80 text-sm mt-1">Khổ A5 • Font 14pt • Xuất Word & PDF</p>
           </div>
@@ -142,7 +290,7 @@ const App = () => {
                   type="text"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   value={metadata.schoolName}
-                  onChange={(e) => updateMetadata('schoolName', e.target.value)}
+                  onChange={(e) => handleMetadataChange('schoolName', e.target.value)}
                 />
               </div>
               <div>
@@ -151,7 +299,7 @@ const App = () => {
                   type="text"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   value={metadata.eventTitle}
-                  onChange={(e) => updateMetadata('eventTitle', e.target.value)}
+                  onChange={(e) => handleMetadataChange('eventTitle', e.target.value)}
                 />
               </div>
               <div>
@@ -160,7 +308,7 @@ const App = () => {
                   type="text"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   value={metadata.speakerName}
-                  onChange={(e) => updateMetadata('speakerName', e.target.value)}
+                  onChange={(e) => handleMetadataChange('speakerName', e.target.value)}
                 />
               </div>
               <div>
@@ -169,7 +317,7 @@ const App = () => {
                   type="text"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   value={metadata.mcName}
-                  onChange={(e) => updateMetadata('mcName', e.target.value)}
+                  onChange={(e) => handleMetadataChange('mcName', e.target.value)}
                 />
               </div>
             </div>
@@ -183,9 +331,17 @@ const App = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-gray-800 uppercase text-sm tracking-wider">Các phân đoạn kịch bản</h2>
-              <button onClick={addSection} className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1">
-                <Plus className="w-4 h-4" /> Thêm trang mới
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={undo} disabled={!canUndo} className="text-gray-500 hover:text-blue-600 disabled:opacity-30 p-1" title="Undo (Ctrl+Z)">
+                  <Undo className="w-4 h-4" />
+                </button>
+                <button onClick={redo} disabled={!canRedo} className="text-gray-500 hover:text-blue-600 disabled:opacity-30 p-1" title="Redo (Ctrl+Y)">
+                  <Redo className="w-4 h-4" />
+                </button>
+                <button onClick={addSection} className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1 ml-2">
+                  <Plus className="w-4 h-4" /> Thêm trang mới
+                </button>
+              </div>
             </div>
             
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -199,7 +355,7 @@ const App = () => {
                         className="font-bold text-gray-700 bg-transparent outline-none border-b border-transparent focus:border-blue-300"
                         placeholder="Tiêu đề trang mới..."
                         value={section.title}
-                        onChange={(e) => updateSection(section.id, 'title', e.target.value)}
+                        onChange={(e) => handleSectionChange(section.id, 'title', e.target.value)}
                       />
                     </div>
                     <button onClick={() => removeSection(section.id)} className="text-gray-300 hover:text-red-500 transition-colors">
@@ -207,18 +363,22 @@ const App = () => {
                     </button>
                   </div>
                   
-                  <textarea
-                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-lg min-h-[100px] outline-none text-sm"
-                    value={section.content}
-                    onChange={(e) => updateSection(section.id, 'content', e.target.value)}
+                  <RichTextEditor
+                    id={`editor-${section.id}`}
+                    content={section.content}
+                    onChange={(val) => handleSectionChange(section.id, 'content', val)}
                   />
 
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2 mt-2 items-center">
                     {['TRUONG', 'MC', 'DIEN_GIA', 'SU_KIEN'].map(tag => (
-                      <button key={tag} onClick={() => insertTag(section.id, tag)} className="text-[9pt] bg-white border px-2 py-0.5 rounded hover:bg-blue-50 hover:text-blue-600">
+                      <button key={tag} onMouseDown={(e) => e.preventDefault()} onClick={() => insertTag(section.id, tag)} className="text-[9pt] bg-white border px-2 py-0.5 rounded hover:bg-blue-50 hover:text-blue-600">
                         [{tag}]
                       </button>
                     ))}
+                    <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => insertBold(section.id)} className="text-[9pt] bg-white border px-2 py-0.5 rounded hover:bg-gray-100 flex items-center gap-1 font-bold" title="In đậm (Ctrl+B)">
+                      <Bold className="w-3 h-3" /> Bold
+                    </button>
                   </div>
                 </div>
               ))}
@@ -281,9 +441,10 @@ const App = () => {
                 {index + 1}. {section.title}
               </h3>
             )}
-            <div className="text-justify whitespace-pre-wrap leading-relaxed">
-              {processPlaceholders(section.content)}
-            </div>
+            <div 
+              className="text-justify whitespace-pre-wrap leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: processPlaceholders(section.content) }}
+            />
           </div>
         ))}
 
